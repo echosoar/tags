@@ -3,22 +3,22 @@ export interface ITagInitOptions {
   dialect?: ITagDialectOption;
 }
 
-export type MysqlQuery = (sql: string, placeholder?: any[]) => [any, any];
+
 type ITagDialectOption = {
   dialectType: 'memory'
 } | ITagMysqlDialectOption;
 
+
+export type IMysqlQuery = (sql: string, placeholder?: any[]) => [any, any];
 export interface ITagMysqlDialectOption {
   dialectType: 'mysql';
   sync?: boolean; // auto create table
   tablePrefix?: string;
   tableSeparator?: string;
   instance: {
-    query: MysqlQuery;
+    query: IMysqlQuery;
   };
 }
-
-
 
 export interface ITagDefine {
   name: string;
@@ -90,7 +90,7 @@ export interface ITagListInstanceTagsOptions extends ITagInstance, ITagPages{}
 
 export interface ITagInstance {
   // 实体id
-  instanceId: number,
+  objId: number,
 }
 
 export interface ITagListInstanceOptions extends ITagPages {

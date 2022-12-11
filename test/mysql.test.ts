@@ -31,7 +31,7 @@ describe('mysql.test.ts', () => {
   afterAll(() => {
     connection.close();
   });
-  it.only('new tag', async () => {
+  it('new tag', async () => {
     const tag1Result = await tagService.new({
       name: 'test1',
       desc: 'desc test 1'
@@ -49,7 +49,7 @@ describe('mysql.test.ts', () => {
     });
     assert (tag2Result.success && tag2Result.id > tag1Result.id);
   });
-  it.only('list tag', async () => {
+  it('list tag', async () => {
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test-list-' + (i + 1),
@@ -80,7 +80,7 @@ describe('mysql.test.ts', () => {
     assert(match.list[1].id === 4);
     assert(match.list[3].name.endsWith('-67'));
   });
-  it.only('update tag', async () => {
+  it('update tag', async () => {
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test-update-' + (i + 1),
@@ -102,25 +102,22 @@ describe('mysql.test.ts', () => {
     });
     assert(updateByNameRes.success && updateByNameRes.id === item67.id);
   });
-  it.skip('remove tag', async () => {
-    const tagService = new TagService({
-      type: 'test-update'
-    });
-    await tagService.ready();
+  it('remove tag', async () => {
     for(let i = 0; i < 100; i++) {
       await tagService.new({
-        name: 'test' + (i + 1),
+        name: 'test-remove-' + (i + 1),
         desc: 'desc test ' + (i + 1)
       });
     }
-    const removeRes = await tagService.remove(23);
-    assert(removeRes.success && removeRes.id === 23);
-    const find23 = await tagService.list({ match: [23], count: true });
+    const {list: [item23]} = await tagService.list({ match: ['test-remove-23'] });
+    const removeRes = await tagService.remove(item23.id);
+    assert(removeRes.success && removeRes.id === item23.id);
+    const find23 = await tagService.list({ match: [item23.id], count: true });
     assert(find23.list.length === 0 && find23.total === 0);
-    const findAll = await tagService.list({ count: true });
+    const findAll = await tagService.list({ match: ['test-remove-%'], count: true });
     assert(findAll.total === 99);
   });
-  it.only('bind tags', async () => {
+  it('bind tags', async () => {
     const tagService = new TagService({
       type: 'test-bind-instance'
     });
@@ -132,19 +129,19 @@ describe('mysql.test.ts', () => {
       });
     }
     const bindRes = await tagService.bind({
-      instanceId: 1,
+      objId: 1,
       tags: [1,23,45,78]
     });
     assert(bindRes.success);
 
     const bindRes2 = await tagService.bind({
-      instanceId: 1,
+      objId: 1,
       tags: [1,23,'xxx']
     });
     assert(!bindRes2.success && bindRes2.message === TAG_ERROR.NOT_EXISTS);
     // auto create
     const bindRes3 = await tagService.bind({
-      instanceId: 1,
+      objId: 1,
       tags: [1,23,'xxx'],
       autoCreateTag: true
     });
@@ -168,7 +165,7 @@ describe('mysql.test.ts', () => {
     for(let i = 1; i <  10; i++) {
       for(let j = 1; j < 10; j ++) {
         await tagService.bind({
-          instanceId: i,
+          objId: i,
           tags: [i * j]
         });
       }
@@ -209,21 +206,21 @@ describe('mysql.test.ts', () => {
       });
     }
     await tagService.bind({
-      instanceId: 123,
+      objId: 123,
       tags: [1,2,3,4]
     });
     const { list, total  } = await tagService.listInstanceTags({
-      instanceId: 123,
+      objId: 123,
       count: true
     });
     assert(list.length === 4 && total === 4);
     assert(list[1].id === 2 && list[2].id === 3 )
     await tagService.unbind({
-      instanceId: 123,
+      objId: 123,
       tags: [3, 1],
     });
     const afterUnbind = await tagService.listInstanceTags({
-      instanceId: 123,
+      objId: 123,
       count: true
     });
     assert(afterUnbind.list.length === 2 && afterUnbind.total === 2);

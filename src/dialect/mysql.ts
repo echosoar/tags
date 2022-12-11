@@ -1,5 +1,5 @@
 import { TAG_ERROR } from "../error";
-import { MysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions } from "../interface";
+import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 enum TableName {
@@ -10,7 +10,7 @@ enum TableName {
 export class MysqlDialect implements ITagDialect {
   private options: ITagInitOptions;
   private dialectOptions: ITagMysqlDialectOption;
-  private query: MysqlQuery;
+  private query: IMysqlQuery;
   constructor(options: ITagInitOptions) {
     this.options = options;
     this.dialectOptions = options.dialect as ITagMysqlDialectOption;
@@ -41,7 +41,18 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async remove(tagIdOrName: number): Promise<ITagOperResult> {
-    return success();
+    const existTagId = await this.getTag(tagIdOrName);
+    if (!existTagId) {
+      return error(TAG_ERROR.NOT_EXISTS, { id: tagIdOrName });
+    }
+     //  TODO: remove object tag
+     // 先删除 object tag，
+    const sql = `delete from ${this.buildTableName(TableName.Tag)} where id = ${existTagId}`;
+    const [raws] = await this.query(sql);
+    if (raws.affectedRows !== 1) {
+      return error(TAG_ERROR.OPER_ERROR)
+    }
+    return success({ id: existTagId });
   }
 
   async update(tagIdOrName: number, params: Partial<ITagDefine>): Promise<ITagOperResult> {
@@ -177,7 +188,7 @@ export class MysqlDialect implements ITagDialect {
     // relationship table
     await this.checkOrCreateTable(this.buildTableName(TableName.Relationship), [
       `\`tid\` BIGINT unsigned NOT NULL,`,
-      `\`inid\` BIGINT unsigned NOT NULL,`,
+      `\`oid\` BIGINT unsigned NOT NULL,`,
     ]);
   }
 

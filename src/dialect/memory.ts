@@ -39,12 +39,12 @@ export class MemoryDialect implements ITagDialect {
     if (!tagItem) {
       return error(TAG_ERROR.NOT_EXISTS, { id: tagIdOrName });
     }
-    const { list: allInstanceId } = await this.listInstance({
+    const { list: allObjectId } = await this.listInstance({
       tags: [tagItem.id],
       pageSize: Infinity,
     });
-    for(const instanceId of allInstanceId) {
-      this.tagRelationStore.delete(`${tagItem.id}-${instanceId}`);
+    for(const objId of allObjectId) {
+      this.tagRelationStore.delete(`${tagItem.id}-${objId}`);
     }
     this.tagStore.delete(tagItem.name);
     this.tagStore.delete(tagItem.id);
@@ -130,7 +130,7 @@ export class MemoryDialect implements ITagDialect {
       return e;
     }
     for(const tagItem of tagList) {
-      this.tagRelationStore.set(`${tagItem.id}-${bindOptions.instanceId}`, true);
+      this.tagRelationStore.set(`${tagItem.id}-${bindOptions.objId}`, true);
     }
     return success();
   }
@@ -141,7 +141,7 @@ export class MemoryDialect implements ITagDialect {
       const tagItem = this.tagStore.get(tag);
       
       if (tagItem) {
-        this.tagRelationStore.delete(`${tagItem.id}-${unbindOptions.instanceId}`);
+        this.tagRelationStore.delete(`${tagItem.id}-${unbindOptions.objId}`);
       }
     }
     return success();
@@ -155,8 +155,8 @@ export class MemoryDialect implements ITagDialect {
     const resultIdMap = {};
 
     for (let [relative] of this.tagRelationStore) {
-      const [tagId, relaInstanceId] = relative.split('-');
-      if (resultIdMap[relaInstanceId] && resultIdMap[relaInstanceId].length === tags.length) {
+      const [tagId, relaObjectId] = relative.split('-');
+      if (resultIdMap[relaObjectId] && resultIdMap[relaObjectId].length === tags.length) {
         continue;
       }
       const tagItem = this.tagStore.get(+tagId);
@@ -171,13 +171,13 @@ export class MemoryDialect implements ITagDialect {
       }): true;
 
       if (matched) {
-        if (!resultIdMap[relaInstanceId]) {
-          resultIdMap[relaInstanceId] = []
+        if (!resultIdMap[relaObjectId]) {
+          resultIdMap[relaObjectId] = []
         }
-        resultIdMap[relaInstanceId].push( tagItem.id);
-        if (resultIdMap[relaInstanceId].length === tags.length) {
+        resultIdMap[relaObjectId].push( tagItem.id);
+        if (resultIdMap[relaObjectId].length === tags.length) {
           if (matchedItemIndex >= start && matchedItemIndex < end) {
-            result.push(+relaInstanceId);
+            result.push(+relaObjectId);
           }
           matchedItemIndex ++;
         }
@@ -197,15 +197,15 @@ export class MemoryDialect implements ITagDialect {
   }
 
   async listInstanceTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
-    const { page, pageSize, instanceId, count } = listOptions;
+    const { page, pageSize, objId, count } = listOptions;
     const { limit: start, end } = getPageOpions(page, pageSize);
     let matchedItemIndex = 0;
     const result: Array<ITagItem> = [];
     const resultIdMap = {};
 
     for (let [relative] of this.tagRelationStore) {
-      const [tagId, relaInstanceId] = relative.split('-');
-      if (+relaInstanceId !== instanceId) {
+      const [tagId, relaObjectId] = relative.split('-');
+      if (+relaObjectId !== objId) {
         continue;
       }
       const tagItem = this.tagStore.get(+tagId);
