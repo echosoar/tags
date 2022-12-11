@@ -1,5 +1,5 @@
 import { TAG_ERROR } from "../error";
-import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions } from "../interface";
+import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 
@@ -39,12 +39,12 @@ export class MemoryDialect implements ITagDialect {
     if (!tagItem) {
       return error(TAG_ERROR.NOT_EXISTS, { id: tagIdOrName });
     }
-    const { list: allObjectId } = await this.listInstance({
+    const { list: allObjectId } = await this.listObjects({
       tags: [tagItem.id],
       pageSize: Infinity,
     });
-    for(const objId of allObjectId) {
-      this.tagRelationStore.delete(`${tagItem.id}-${objId}`);
+    for(const objectId of allObjectId) {
+      this.tagRelationStore.delete(`${tagItem.id}-${objectId}`);
     }
     this.tagStore.delete(tagItem.name);
     this.tagStore.delete(tagItem.id);
@@ -121,7 +121,7 @@ export class MemoryDialect implements ITagDialect {
             });
             tagItem = this.tagStore.get(newTag.id);
           } else {
-            throw error(TAG_ERROR.NOT_EXISTS, { id: tag })
+            throw error(TAG_ERROR.NOT_EXISTS, { id: [tag] })
           }
         }
         return tagItem;
@@ -130,24 +130,24 @@ export class MemoryDialect implements ITagDialect {
       return e;
     }
     for(const tagItem of tagList) {
-      this.tagRelationStore.set(`${tagItem.id}-${bindOptions.objId}`, true);
+      this.tagRelationStore.set(`${tagItem.id}-${bindOptions.objectId}`, true);
     }
     return success();
   }
 
 
-  async unbind(unbindOptions: ITagBindOptions): Promise<ITagOperResult> {
+  async unbind(unbindOptions: ITagUnBindOptions): Promise<ITagOperResult> {
     for(const tag of unbindOptions.tags) {
       const tagItem = this.tagStore.get(tag);
       
       if (tagItem) {
-        this.tagRelationStore.delete(`${tagItem.id}-${unbindOptions.objId}`);
+        this.tagRelationStore.delete(`${tagItem.id}-${unbindOptions.objectId}`);
       }
     }
     return success();
   }
 
-  async listInstance(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
+  async listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
     const { page, pageSize, tags = [], count } = listOptions;
     const { limit: start, end } = getPageOpions(page, pageSize);
     let matchedItemIndex = 0;
@@ -196,8 +196,8 @@ export class MemoryDialect implements ITagDialect {
     return returnResult;
   }
 
-  async listInstanceTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
-    const { page, pageSize, objId, count } = listOptions;
+  async listObjectTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
+    const { page, pageSize, objectId, count } = listOptions;
     const { limit: start, end } = getPageOpions(page, pageSize);
     let matchedItemIndex = 0;
     const result: Array<ITagItem> = [];
@@ -205,7 +205,7 @@ export class MemoryDialect implements ITagDialect {
 
     for (let [relative] of this.tagRelationStore) {
       const [tagId, relaObjectId] = relative.split('-');
-      if (+relaObjectId !== objId) {
+      if (+relaObjectId !== objectId) {
         continue;
       }
       const tagItem = this.tagStore.get(+tagId);

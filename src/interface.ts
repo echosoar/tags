@@ -1,5 +1,5 @@
 export interface ITagInitOptions {
-  type: string;
+  group: string;
   dialect?: ITagDialectOption;
 }
 
@@ -45,11 +45,11 @@ export abstract class ITagDialect {
   // 绑定实体
   abstract bind(bindOptions: ITagBindOptions): Promise<ITagOperResult>
   // 解绑实体
-  abstract unbind(unbindOptions: ITagBindOptions): Promise<ITagOperResult>
+  abstract unbind(unbindOptions: ITagUnBindOptions): Promise<ITagOperResult>
   // 根据标签列举实体
-  abstract listInstance(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>>;
+  abstract listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>>;
   // 根据实体获取标签
-  abstract listInstanceTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>>;
+  abstract listObjectTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>>;
 }
 
 export interface ITagOperResult {
@@ -90,7 +90,7 @@ export interface ITagListInstanceTagsOptions extends ITagInstance, ITagPages{}
 
 export interface ITagInstance {
   // 实体id
-  objId: number,
+  objectId: number,
 }
 
 export interface ITagListInstanceOptions extends ITagPages {

@@ -1,6 +1,6 @@
 import { MysqlDialect, MemoryDialect } from "./dialect";
 import { TAG_ERROR } from "./error";
-import { ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions } from "./interface";
+import { ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "./interface";
 import { error } from "./utils";
 export * from './interface';
 export * from './error';
@@ -49,12 +49,12 @@ export class TagService implements ITagDialect {
     return this.dialect.bind(bindOptions);
   }
 
-  async unbind(unbindOptions: ITagBindOptions): Promise<ITagOperResult> {
+  async unbind(unbindOptions: ITagUnBindOptions): Promise<ITagOperResult> {
     return this.dialect.unbind(unbindOptions);
 }
 
-  async listInstance(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
-    return this.dialect.listInstance({
+  async listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
+    return this.dialect.listObjects({
       page: 1,
       pageSize: 20,
       tags: [],
@@ -62,8 +62,8 @@ export class TagService implements ITagDialect {
     });
   }
 
-  async listInstanceTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
-    return this.dialect.listInstanceTags({
+  async listObjectTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
+    return this.dialect.listObjectTags({
       page: 1,
       pageSize: 20,
       ...listOptions

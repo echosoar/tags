@@ -1,8 +1,8 @@
 import { TAG_ERROR } from "../error";
-import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions } from "../interface";
+import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
-enum TableName {
+export enum MysqlTableName {
   Tag = 'tag',
   Relationship = 'relationship',
 }
@@ -24,13 +24,13 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async new(tagDefine: ITagDefine): Promise<ITagOperResult> {
-   const existTagId = await this.getTag(tagDefine.name);
+   const { ids: [existTagId] } = await this.getTags(tagDefine.name);
     if (existTagId) {
       return error(TAG_ERROR.EXISTS, {
         id: existTagId,
       });
     }
-    const sql = `insert into ${this.buildTableName(TableName.Tag)} (\`name\`, \`descri\`) values (?, ?)`;
+    const sql = `insert into ${this.buildTableName(MysqlTableName.Tag)} (\`name\`, \`descri\`) values (?, ?)`;
     const [raws] = await this.query(sql, [tagDefine.name, tagDefine.desc]);
     if (!raws.insertId) {
       return error(TAG_ERROR.OPER_ERROR);
@@ -41,13 +41,14 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async remove(tagIdOrName: number): Promise<ITagOperResult> {
-    const existTagId = await this.getTag(tagIdOrName);
+    const { ids: [existTagId] } = await this.getTags(tagIdOrName);
     if (!existTagId) {
       return error(TAG_ERROR.NOT_EXISTS, { id: tagIdOrName });
     }
-     //  TODO: remove object tag
-     // 先删除 object tag，
-    const sql = `delete from ${this.buildTableName(TableName.Tag)} where id = ${existTagId}`;
+    // 先删除 object tag，
+    const removeRelationshipSql = `delete from ${this.buildTableName(MysqlTableName.Relationship)} where tid = ${existTagId}`;
+    await this.query(removeRelationshipSql);
+    const sql = `delete from ${this.buildTableName(MysqlTableName.Tag)} where id = ${existTagId}`;
     const [raws] = await this.query(sql);
     if (raws.affectedRows !== 1) {
       return error(TAG_ERROR.OPER_ERROR)
@@ -56,7 +57,7 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async update(tagIdOrName: number, params: Partial<ITagDefine>): Promise<ITagOperResult> {
-    const existTagId = await this.getTag(tagIdOrName);
+    const { ids: [existTagId] } = await this.getTags(tagIdOrName);
     if (!existTagId) {
       return error(TAG_ERROR.NOT_EXISTS, { id: tagIdOrName });
     }
@@ -73,7 +74,7 @@ export class MysqlDialect implements ITagDialect {
       fields.push(`\`${updateKey}\` = ?`);
       placeholders.push(params[key]);
     });
-    const sql = `update ${this.buildTableName(TableName.Tag)} set ${fields.join(', ')} where id = ${existTagId}`;
+    const sql = `update ${this.buildTableName(MysqlTableName.Tag)} set ${fields.join(', ')} where id = ${existTagId}`;
     const [raws] = await this.query(sql, placeholders);
     if (raws.affectedRows !== 1) {
       return error(TAG_ERROR.OPER_ERROR)
@@ -107,10 +108,10 @@ export class MysqlDialect implements ITagDialect {
         return `\`name\` like ?`;
       }),
     ].filter(v => !!v).join(' or ');
-    const selectSql = `select * from ${this.buildTableName(TableName.Tag)} ${condition ? ` where ${condition}` : ''} limit ${limit},${offset}`;
+    const selectSql = `select * from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''} limit ${limit},${offset}`;
     let queryPromise = [this.query(selectSql, placeholder)]
     if (count) {
-      const countSql = `select count(id) as total from ${this.buildTableName(TableName.Tag)} ${condition ? ` where ${condition}` : ''}`;
+      const countSql = `select count(id) as total from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''}`;
       queryPromise.push(this.query(countSql, placeholder));
     }
     const [selectRes, countRes] = await Promise.all(queryPromise).then(resultList => {
@@ -132,61 +133,181 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async bind(bindOptions?: ITagBindOptions): Promise<ITagOperResult> {
+    const { tags, objectId, autoCreateTag } = bindOptions;
+    const { ids, notExists } = await this.getTags(tags);
+    if (notExists.id.length) {
+      return error(TAG_ERROR.NOT_EXISTS, {
+        id: notExists.id
+      });
+    }
+    if (notExists.name.length) {
+      if (!autoCreateTag) {
+        return error(TAG_ERROR.NOT_EXISTS, {
+          id: notExists.name
+        });
+      }
+      const newTagIds = await Promise.all(notExists.name.map(async (tag) => {
+        const { id } = await this.new({
+          name: tag,
+          desc: 'auto creat'
+        });
+        return id;
+      }));
+      ids.push(...newTagIds);
+    }
+    await Promise.all(ids.map(async tagId => {
+      // TODO: 简单事务，检测是否存在关系
+      await this.query(`insert into ${this.buildTableName(MysqlTableName.Relationship)} (\`tid\`, \`oid\`) values (?, ?)`, [tagId, objectId]);
+    }));
     return success();
   }
 
-
-  async unbind(unbindOptions: ITagBindOptions): Promise<ITagOperResult> {
+  async unbind(unbindOptions: ITagUnBindOptions): Promise<ITagOperResult> {
+    let removeRelationshipSql = `delete from ${this.buildTableName(MysqlTableName.Relationship)} where oid = ${unbindOptions.objectId}`;
+    if (unbindOptions.tags?.length) {
+      const { ids } = await this.getTags(unbindOptions.tags);
+      removeRelationshipSql += ` and tid in (${ids.join(',')})`
+    }
+    await this.query(removeRelationshipSql);
     return success();
   }
 
-  async listInstance(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
-    return {
-      list: []
+  async listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
+    const { page, pageSize, tags = [], count } = listOptions;
+    const { limit, offset } = getPageOpions(page, pageSize);
+    const { ids, notExists } = await this.getTags(tags);
+    if (notExists.all.length) {
+      return {
+        list: [],
+        total: 0
+      }
     }
+    const queryPromises = [];
+    const sql = `SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length} limit ${limit},${offset}`;
+    queryPromises.push(this.query(sql));
+    if (count) {
+      // TODO: more high performance sql
+      const sql = `select count(*) as total from (SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length}) as list`;
+      queryPromises.push(this.query(sql));
+    }
+    const [selectRes, countRes] = await Promise.all(queryPromises).then(resultList => {
+      return resultList.map(([raws]) => {
+        return raws;
+      });
+    });
+    const returnResult: ITagListResult<number> = {
+      list: selectRes.map(item => {
+        return item.oid;
+      }),
+    }
+    if (count) {
+      returnResult.total = countRes[0].total
+    }
+    return returnResult;
   }
 
-  async listInstanceTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
-    return {
-      list: []
+  async listObjectTags(listOptions?: ITagListInstanceTagsOptions): Promise<ITagListResult<ITagItem>> {
+    const { page, pageSize, objectId, count } = listOptions;
+    const { limit, offset } = getPageOpions(page, pageSize);
+    const sql = `select tid from ${this.buildTableName(MysqlTableName.Relationship)} where oid = ? limit ${limit},${offset}`;
+    const queryPromises = [this.query(sql, [objectId])];
+    if (count) {
+      const sql = `select count(tid) as total from ${this.buildTableName(MysqlTableName.Relationship)} where oid = ?`;
+      queryPromises.push(this.query(sql, [objectId]));
     }
+    const [tagIdList, countRes] = await Promise.all(queryPromises).then(resultList => {
+      return resultList.map(([raws]) => {
+        return raws;
+      });
+    });
+
+    let tagList = [];
+    if (tagIdList.length) {
+      const { list } = await this.list({
+        match: tagIdList.map(raw => raw.tid),
+      })
+      tagList = list;
+    }
+
+    
+    const returnResult: ITagListResult<ITagItem> = {
+      list: tagList,
+    }
+    if (count) {
+      returnResult.total = countRes[0].total
+    }
+    return returnResult;
   }
 
   private buildTableName(tableName) {
-    const tableNameList = this.dialectOptions.tablePrefix ? [this.dialectOptions.tablePrefix, this.options.type] : [this.options.type];
+    const tableNameList = this.dialectOptions.tablePrefix ? [this.dialectOptions.tablePrefix, this.options.group] : [this.options.group];
     return tableNameList.concat(tableName).join(this.dialectOptions.tableSeparator || '_');
   }
 
-  private async getTag(tagIdOrName: string | number): Promise<number> {
-    const type = typeof tagIdOrName;
-    let sql;
-    let placeholder: any[] = [tagIdOrName];
-    switch(type) {
-      case 'string':
-        sql = `select id from ${this.buildTableName(TableName.Tag)} where name = ?`;
-        break;
-      case 'number':
-        sql = `select id from ${this.buildTableName(TableName.Tag)} where id = ?`;
-        break;
-      default:
-        return;
+  private async getTags(tagIdOrName: string | number | Array<string | number> ): Promise<{
+    ids: number[],
+    notExists: {
+      id: number[],
+      name: string[]
+      all: Array<string|number>
     }
+  }> {
+    const tags = [].concat(tagIdOrName);
+    const idList = [];
+    const nameList = [];
+    const placeholder = [];
+    const keyMap = new Map();
+    for(const tag of tags) {
+      keyMap.set(tag, true);
+      if (typeof tag === 'number') {
+        idList.push(tag);
+      } else if(typeof tag === 'string') {
+        nameList.push(`\`name\` = ?`);
+        placeholder.push(tag);
+      }
+    }
+    
+    const condition = [
+      idList.length ? `id in (${idList.join()})`: '',
+      ...nameList
+    ].filter(v => !!v).join(' or ');
+    const sql = `select id,name from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''}`;
     const [raws] = await this.query(sql, placeholder);
-    if (!raws?.length) {
-      return;
+    const tagIds = raws.map(raw => {
+      keyMap.delete(raw.id);
+      keyMap.delete(raw.name);
+      return raw.id;
+    });
+    const notExists: any = {
+      id: [],
+      name: [],
+      all: []
     }
-    return raws[0].id;
+    const notExistKeys = keyMap.keys();
+    for(const key of notExistKeys) {
+      notExists.all.push(key);
+      if (typeof key === 'number') {
+        notExists.id.push(key)
+      } else if (typeof key === 'string') {
+        notExists.name.push(key)
+      }
+    }
+    notExists.all
+    return {
+      ids: tagIds,
+      notExists
+    };
   }
 
 
   private async syncTable() {
     // tag table
-    await this.checkOrCreateTable(this.buildTableName(TableName.Tag), [
+    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Tag), [
       `\`name\` varchar(32) NULL,`,
       `\`descri\` varchar(128) NULL,`,
     ]);
     // relationship table
-    await this.checkOrCreateTable(this.buildTableName(TableName.Relationship), [
+    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Relationship), [
       `\`tid\` BIGINT unsigned NOT NULL,`,
       `\`oid\` BIGINT unsigned NOT NULL,`,
     ]);

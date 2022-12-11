@@ -3,7 +3,7 @@ import assert from 'assert';
 describe('memory.test.ts', () => {
   it('new tag', async () => {
     const tagService = new TagService({
-      type: 'test1'
+      group: 'test1'
     });
     await tagService.ready();
     const tag1Result = await tagService.new({
@@ -26,7 +26,7 @@ describe('memory.test.ts', () => {
   });
   it('list tag', async () => {
     const tagService = new TagService({
-      type: 'test-list'
+      group: 'test-list'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -65,7 +65,7 @@ describe('memory.test.ts', () => {
   });
   it('update tag', async () => {
     const tagService = new TagService({
-      type: 'test-update'
+      group: 'test-update'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -90,7 +90,7 @@ describe('memory.test.ts', () => {
   });
   it('remove tag', async () => {
     const tagService = new TagService({
-      type: 'test-update'
+      group: 'test-update'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -108,7 +108,7 @@ describe('memory.test.ts', () => {
   });
   it('bind tags', async () => {
     const tagService = new TagService({
-      type: 'test-bind-instance'
+      group: 'test-bind-instance'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -118,19 +118,19 @@ describe('memory.test.ts', () => {
       });
     }
     const bindRes = await tagService.bind({
-      objId: 1,
+      objectId: 1,
       tags: [1,23,45,78]
     });
     assert(bindRes.success);
 
     const bindRes2 = await tagService.bind({
-      objId: 1,
+      objectId: 1,
       tags: [1,23,'xxx']
     });
-    assert(!bindRes2.success && bindRes2.message === TAG_ERROR.NOT_EXISTS);
+    assert(!bindRes2.success && bindRes2.message === TAG_ERROR.NOT_EXISTS && bindRes2.id[0] === 'xxx');
     // auto create
     const bindRes3 = await tagService.bind({
-      objId: 1,
+      objectId: 1,
       tags: [1,23,'xxx'],
       autoCreateTag: true
     });
@@ -139,9 +139,9 @@ describe('memory.test.ts', () => {
     assert(tag.list[0].name === 'xxx' && tag.list[0].id === 101);
   });
 
-  it('list objId by tags', async () => {
+  it('list objectId by tags', async () => {
     const tagService = new TagService({
-      type: 'test-list-instance'
+      group: 'test-list-instance'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -154,20 +154,20 @@ describe('memory.test.ts', () => {
     for(let i = 1; i <  10; i++) {
       for(let j = 1; j < 10; j ++) {
         await tagService.bind({
-          objId: i,
+          objectId: i,
           tags: [i * j]
         });
       }
     }
-    const listRes = await tagService.listInstance({
+    const listRes = await tagService.listObjects({
       tags: [16],
       count: true
     });
     assert(listRes.list.length === 3 && listRes.total === 3);
     assert(listRes.list[0] === 2 && listRes.list[1] === 4 && listRes.list[2] === 8);
  
-    // objId = 4/8 
-    const listRes2 = await tagService.listInstance({
+    // objectId = 4/8 
+    const listRes2 = await tagService.listObjects({
       tags: [16, 32],
       count: true
     });
@@ -176,7 +176,7 @@ describe('memory.test.ts', () => {
 
     // remove tag 16
     await tagService.remove(16);
-    const listResAfterRemove16 = await tagService.listInstance({
+    const listResAfterRemove16 = await tagService.listObjects({
       tags: [16],
       count: true
     });
@@ -185,7 +185,7 @@ describe('memory.test.ts', () => {
 
   it('unbind & listInstanTags', async () => {
     const tagService = new TagService({
-      type: 'test-list-unbind'
+      group: 'test-list-unbind'
     });
     await tagService.ready();
     for(let i = 0; i < 100; i++) {
@@ -195,21 +195,21 @@ describe('memory.test.ts', () => {
       });
     }
     await tagService.bind({
-      objId: 123,
+      objectId: 123,
       tags: [1,2,3,4]
     });
-    const { list, total  } = await tagService.listInstanceTags({
-      objId: 123,
+    const { list, total  } = await tagService.listObjectTags({
+      objectId: 123,
       count: true
     });
     assert(list.length === 4 && total === 4);
     assert(list[1].id === 2 && list[2].id === 3 )
     await tagService.unbind({
-      objId: 123,
+      objectId: 123,
       tags: [3, 1],
     });
-    const afterUnbind = await tagService.listInstanceTags({
-      objId: 123,
+    const afterUnbind = await tagService.listObjectTags({
+      objectId: 123,
       count: true
     });
     assert(afterUnbind.list.length === 2 && afterUnbind.total === 2);

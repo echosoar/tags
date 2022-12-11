@@ -1,6 +1,6 @@
 {
   "name": "tagsys",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "tag system",
   "main": "./dist/index.js",
   "scripts": {
