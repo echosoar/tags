@@ -4,8 +4,8 @@
   "description": "tag system",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "mw build",
-    "test": "mw test",
+    "build": "mw build ",
+    "test": "mw test -f ./test/mysql.test.ts",
     "coverage": "mw cov"
   },
   "devDependencies": {
@@ -13,6 +13,7 @@
     "@types/jest": "^27.4.0",
     "@types/node": "^10.17.60",
     "jest": "^29.3.1",
+    "mysql2": "^2.3.3",
     "ts-jest": "^29.0.3",
     "typescript": "^4.1.0"
   },

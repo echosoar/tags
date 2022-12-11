@@ -1,6 +1,6 @@
 import { TAG_ERROR } from "../error";
-import { ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions } from "../interface";
-import { error, getPageOpions, success } from "../utils";
+import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions } from "../interface";
+import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 
 export class MemoryDialect implements ITagDialect {
@@ -10,7 +10,7 @@ export class MemoryDialect implements ITagDialect {
   private tagRelationStore = new Map<`${number}-${number}`, boolean>();
   private tagIndex = 0;
 
-  constructor(_: ITagInitOptions) {}
+  async ready(): Promise<void> {}
 
   async new(tagDefine: ITagDefine): Promise<ITagOperResult> {
       let tagId;
@@ -75,26 +75,15 @@ export class MemoryDialect implements ITagDialect {
       const matched = match.length ? !!match.find(matchItem => {
         
         if (typeof matchItem === 'string') {
-          let matchItemText = matchItem;
-          let matchStart = false;
-          let matchEnd = false;
-          // xxx% macth start with xxx
-          if (matchItem.endsWith('%')) {
-            matchStart = true;
-            matchItemText = matchItemText.slice(0, -1)
-          }
-          if (matchItem.startsWith('%')) {
-            matchEnd = true;
-            matchItemText = matchItemText.slice(1)
-          }
+          const { matchStart, matchEnd, text } = formatMatchLike(matchItem);
           if (matchEnd && matchStart) {
-            return tagItem.name.includes(matchItemText)
+            return tagItem.name.includes(text)
           } else if (matchStart) {
-            return tagItem.name.startsWith(matchItemText)
+            return tagItem.name.startsWith(text)
           } else if(matchEnd) {
-            return tagItem.name.endsWith(matchItemText)
+            return tagItem.name.endsWith(text)
           } else {
-            return tagItem.name === matchItemText;
+            return tagItem.name === text;
           }
         }
         return tagItem.id === matchItem;

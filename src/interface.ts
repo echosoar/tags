@@ -1,7 +1,24 @@
 export interface ITagInitOptions {
   type: string;
-  dialect?: ITagDialect;
+  dialect?: ITagDialectOption;
 }
+
+export type MysqlQuery = (sql: string, placeholder?: any[]) => [any, any];
+type ITagDialectOption = {
+  dialectType: 'memory'
+} | ITagMysqlDialectOption;
+
+export interface ITagMysqlDialectOption {
+  dialectType: 'mysql';
+  sync?: boolean; // auto create table
+  tablePrefix?: string;
+  tableSeparator?: string;
+  instance: {
+    query: MysqlQuery;
+  };
+}
+
+
 
 export interface ITagDefine {
   name: string;
@@ -15,6 +32,8 @@ export interface ITagItem extends ITagDefine {
 }
 
 export abstract class ITagDialect {
+  // 初始化
+  abstract ready(): Promise<void>;
   // 新增标签
   abstract new(tagDefine: ITagDefine): Promise<ITagOperResult>;
   // 删除标签

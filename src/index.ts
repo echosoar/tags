@@ -1,4 +1,4 @@
-import { MemoryDialect } from "./dialect/memory";
+import { MysqlDialect, MemoryDialect } from "./dialect";
 import { TAG_ERROR } from "./error";
 import { ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions } from "./interface";
 import { error } from "./utils";
@@ -9,7 +9,18 @@ export class TagService implements ITagDialect {
   private dialect: ITagDialect;
   constructor(initOptions: ITagInitOptions) {
     this.initOptions = initOptions;
-    this.dialect = this.initOptions.dialect || new MemoryDialect(this.initOptions);
+    switch(this.initOptions.dialect?.dialectType) {
+      case 'mysql':
+        this.dialect = new MysqlDialect(this.initOptions);
+        break;
+      default:
+        this.dialect = new MemoryDialect();
+        break;
+    }
+  }
+
+  async ready() {
+    await this.dialect.ready();
   }
 
   async new(tagDefine: ITagDefine) {
@@ -58,6 +69,10 @@ export class TagService implements ITagDialect {
       ...listOptions
     });
   }
+}
 
-  
+export const makeTagService = async (initOptions: ITagInitOptions): Promise<TagService> => {
+  const tagService = new TagService(initOptions);
+  await tagService.ready();
+  return tagService;
 }

@@ -31,3 +31,25 @@ export const getPageOpions = (page = 1, pageSize = 20) => {
     end,
   }
 }
+
+export const formatMatchLike = (matchItem: string) => {
+  let matchItemText = matchItem;
+  let matchStart = true;
+  let matchEnd = true;
+  // xxx% macth start with xxx
+  if (matchItem.endsWith('%')) {
+    matchEnd = false;
+    matchItemText = matchItemText.slice(0, -1)
+  }
+  // %xxx macth end with xxx
+  if (matchItem.startsWith('%')) {
+    matchStart = false;
+    matchItemText = matchItemText.slice(1)
+  }
+  return {
+    matchEnd,
+    matchStart,
+    text: matchItemText,
+    stashedText: matchItem.replace(/\'/g, '')
+  }
+}
