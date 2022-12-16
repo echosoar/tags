@@ -1,5 +1,5 @@
 import { TAG_ERROR } from "../error";
-import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "../interface";
+import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions, MATCH_TYPE } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 
@@ -63,7 +63,7 @@ export class MemoryDialect implements ITagDialect {
     return success({ id: tagItem.id });
   }
   async list(listOptions?: ITagSearchOptions): Promise<ITagListResult<ITagItem>> {
-    const { page, pageSize, match = [], count } = listOptions;
+    const { page, pageSize, tags = [], count } = listOptions;
     const { limit: start, end } = getPageOpions(page, pageSize);
     let matchedItemIndex = 0;
     const result: Array<ITagItem> = [];
@@ -72,7 +72,7 @@ export class MemoryDialect implements ITagDialect {
       if (!tagItem) {
         continue;
       }
-      const matched = match.length ? !!match.find(matchItem => {
+      const matched = tags.length ? !!tags.find(matchItem => {
         
         if (typeof matchItem === 'string') {
           const { matchStart, matchEnd, text } = formatMatchLike(matchItem);
@@ -148,7 +148,7 @@ export class MemoryDialect implements ITagDialect {
   }
 
   async listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
-    const { page, pageSize, tags = [], count } = listOptions;
+    const { page, pageSize, tags = [], count, type = MATCH_TYPE.Or } = listOptions;
     const { limit: start, end } = getPageOpions(page, pageSize);
     let matchedItemIndex = 0;
     const result: Array<number> = [];
@@ -163,6 +163,7 @@ export class MemoryDialect implements ITagDialect {
       if (!tagItem) {
         continue;
       }
+
       let matched = tags.length ? !!tags.find(matchItem => {
         if (typeof matchItem === 'string') {
           return tagItem.name === matchItem;
@@ -175,7 +176,7 @@ export class MemoryDialect implements ITagDialect {
           resultIdMap[relaObjectId] = []
         }
         resultIdMap[relaObjectId].push( tagItem.id);
-        if (resultIdMap[relaObjectId].length === tags.length) {
+        if ((type === MATCH_TYPE.And &&  resultIdMap[relaObjectId].length === tags.length) || (type === MATCH_TYPE.Or && resultIdMap[relaObjectId].length === 1)) {
           if (matchedItemIndex >= start && matchedItemIndex < end) {
             result.push(+relaObjectId);
           }
@@ -184,7 +185,6 @@ export class MemoryDialect implements ITagDialect {
         if (!count && result.length === pageSize) {
           break;
         }
-        
       }
     }
     const returnResult: ITagListResult<number> = {

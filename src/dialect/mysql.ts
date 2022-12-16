@@ -1,5 +1,5 @@
 import { TAG_ERROR } from "../error";
-import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "../interface";
+import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions, ITagUnBindOptions, MATCH_TYPE } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 export enum MysqlTableName {
@@ -84,12 +84,12 @@ export class MysqlDialect implements ITagDialect {
     });
   }
   async list(listOptions?: ITagSearchOptions): Promise<ITagListResult<ITagItem>> {
-    const { page, pageSize, match = [], count } = listOptions;
+    const { page, pageSize, tags = [], count } = listOptions;
     const { limit, offset } = getPageOpions(page, pageSize);
     const idList = [];
     const nameList = [];
     const placeholder = [];
-    for(const matchItem of match) {
+    for(const matchItem of tags) {
       if (typeof matchItem === 'number') {
         idList.push(matchItem);
       } else if(typeof matchItem === 'string') {
@@ -173,7 +173,7 @@ export class MysqlDialect implements ITagDialect {
   }
 
   async listObjects(listOptions?: ITagListInstanceOptions): Promise<ITagListResult<number>> {
-    const { page, pageSize, tags = [], count } = listOptions;
+    const { page, pageSize, tags = [], count, type = MATCH_TYPE.Or } = listOptions;
     const { limit, offset } = getPageOpions(page, pageSize);
     const { ids, notExists } = await this.getTags(tags);
     if (notExists.all.length) {
@@ -182,13 +182,28 @@ export class MysqlDialect implements ITagDialect {
         total: 0
       }
     }
+    let sql = '';
+    let countSql = '';
+    if (tags.length === 1) {
+      // for more high performance
+      const sqlBase = `FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid = ${ids[0]}`;
+      sql = `SELECT oid ${sqlBase} limit ${limit},${offset}`;
+      countSql = `SELECT count(*) as total ${sqlBase}`
+    } else {
+      if (type === MATCH_TYPE.Or) {
+        const sqlBase = `FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')})`;
+        sql = `SELECT distinct oid ${sqlBase} limit ${limit},${offset}`;
+        countSql = `SELECT count(distinct oid) as total ${sqlBase}`;
+      } else if (type === MATCH_TYPE.And) {
+        sql = `SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length} limit ${limit},${offset}`;
+        countSql = `SELECT count(*) as total FROM (SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length}) as list`
+      }
+    }
+    
     const queryPromises = [];
-    const sql = `SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length} limit ${limit},${offset}`;
     queryPromises.push(this.query(sql));
     if (count) {
-      // TODO: more high performance sql
-      const sql = `select count(*) as total from (SELECT oid FROM ${this.buildTableName(MysqlTableName.Relationship)} where tid in (${ids.join(',')}) group by oid HAVING COUNT(*) = ${ids.length}) as list`;
-      queryPromises.push(this.query(sql));
+      queryPromises.push(this.query(countSql));
     }
     const [selectRes, countRes] = await Promise.all(queryPromises).then(resultList => {
       return resultList.map(([raws]) => {
@@ -224,7 +239,7 @@ export class MysqlDialect implements ITagDialect {
     let tagList = [];
     if (tagIdList.length) {
       const { list } = await this.list({
-        match: tagIdList.map(raw => raw.tid),
+        tags: tagIdList.map(raw => raw.tid),
       })
       tagList = list;
     }

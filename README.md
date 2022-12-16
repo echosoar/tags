@@ -1,2 +1,8 @@
-# tags
-tags system
+# Tag System
+
+## How to use?
+```shell
+npm i tagsys --save
+```
+
+---

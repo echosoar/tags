@@ -1,4 +1,4 @@
-import { TagService, TAG_ERROR } from '../src';
+import { TagService, TAG_ERROR, MATCH_TYPE } from '../src';
 import assert from 'assert';
 describe('memory.test.ts', () => {
   it('new tag', async () => {
@@ -52,7 +52,7 @@ describe('memory.test.ts', () => {
 
     // macth/search/list
     const match = await tagService.list({
-      match: [2, 4, '%t67', 'test78', 'test9%'],
+      tags: [2, 4, '%t67', 'test78', 'test9%'],
       count: true
     });
     // 2/4/9/67/78/90~99
@@ -79,7 +79,7 @@ describe('memory.test.ts', () => {
       desc: 'descxxx23',
     });
     assert(updateRes.success && updateRes.id === 23);
-    const find23 = await tagService.list({ match: [23] });
+    const find23 = await tagService.list({ tags: [23] });
     assert(find23.list.length === 1 && find23.list[0].id === 23 && find23.list[0].name === 'xxxx23' && find23.list[0].desc === 'descxxx23');
 
     const updateByNameRes = await tagService.update('test67', {
@@ -101,7 +101,7 @@ describe('memory.test.ts', () => {
     }
     const removeRes = await tagService.remove(23);
     assert(removeRes.success && removeRes.id === 23);
-    const find23 = await tagService.list({ match: [23], count: true });
+    const find23 = await tagService.list({ tags: [23], count: true });
     assert(find23.list.length === 0 && find23.total === 0);
     const findAll = await tagService.list({ count: true });
     assert(findAll.total === 99);
@@ -135,7 +135,7 @@ describe('memory.test.ts', () => {
       autoCreateTag: true
     });
     assert(bindRes3.success);
-    const tag = await tagService.list({ match: ['xxx']})
+    const tag = await tagService.list({ tags: ['xxx']})
     assert(tag.list[0].name === 'xxx' && tag.list[0].id === 101);
   });
 
@@ -169,10 +169,21 @@ describe('memory.test.ts', () => {
     // objectId = 4/8 
     const listRes2 = await tagService.listObjects({
       tags: [16, 32],
-      count: true
+      count: true,
+      type: MATCH_TYPE.And
     });
     assert(listRes2.list.length === 2 && listRes2.total === 2);
     assert(listRes2.list[0] === 4 && listRes2.list[1] === 8);
+
+    // 16 = 2 * 8 / 4 * 4;32 = 4 * 8
+    const listRes2Or = await tagService.listObjects({
+      tags: [16, 32],
+      count: true,
+      type: MATCH_TYPE.Or,
+      pageSize: 2
+    });
+    assert(listRes2Or.list.length === 2 && listRes2Or.total === 3);
+    assert(listRes2Or.list[0] === 2 && listRes2Or.list[1] === 4);
 
     // remove tag 16
     await tagService.remove(16);

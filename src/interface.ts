@@ -65,7 +65,8 @@ export interface ITagListResult<ListType> {
 
 
 export interface ITagSearchOptions extends ITagPages {
-  match?: Array<number | string>;
+  tags?: Array<number | string>;
+  type?: MATCH_TYPE;
 }
 
 export interface ITagPages {
@@ -93,7 +94,15 @@ export interface ITagInstance {
   objectId: number,
 }
 
+export enum MATCH_TYPE {
+  // 交集
+  And = 'and',
+  // 并集
+  Or = 'or',
+}
+
 export interface ITagListInstanceOptions extends ITagPages {
   tags?: Array<string|number>;
   count?: boolean;
+  type?: MATCH_TYPE;
 }

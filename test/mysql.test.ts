@@ -1,4 +1,4 @@
-import {makeTagService, TagService, TAG_ERROR } from '../src';
+import {makeTagService, MATCH_TYPE, TagService, TAG_ERROR } from '../src';
 const mysql = require('mysql2');
 import assert from 'assert';
 import { MysqlTableName } from '../src/dialect';
@@ -8,15 +8,13 @@ describe('mysql.test.ts', () => {
   const name = 'localtest3';
   beforeAll(async () => {
     connection = mysql.createConnection({
-      host: process.env.MYSQL_HOST,
-      user: process.env.MYSQL_USER || 'localtest',
-      password: process.env.MYSQL_PASS || 'test',
-      database: process.env.MYSQL_DB || 'localtest',
+      host: process.env.MYSQL_HOST || 'db4free.net',
+      user: process.env.MYSQL_USER || 'tagsystest123',
+      password: process.env.MYSQL_PASS || 'tagsystest123',
+      database: process.env.MYSQL_DB || 'tagsystest123',
       charset: 'utf8',
     });
-    // 清空表
-    await connection.promise().query(`TRUNCATE TABLE \`${name}_${MysqlTableName.Tag}\``);
-    await connection.promise().query(`TRUNCATE TABLE \`${name}_${MysqlTableName.Relationship}\``);
+
     tagService = await makeTagService({
       group: name,
       dialect: {
@@ -28,7 +26,10 @@ describe('mysql.test.ts', () => {
           }
         }
       }
-    })
+    });
+     // 清空表
+     await connection.promise().query(`TRUNCATE TABLE \`${name}_${MysqlTableName.Tag}\``);
+     await connection.promise().query(`TRUNCATE TABLE \`${name}_${MysqlTableName.Relationship}\``);
   });
   afterAll(async () => {
     // 清空表
@@ -76,7 +77,7 @@ describe('mysql.test.ts', () => {
 
     // macth/search/list
     const match = await tagService.list({
-      match: [2, 4, '%-list-67', 'test-list-78', 'test-list-9%'],
+      tags: [2, 4, '%-list-67', 'test-list-78', 'test-list-9%'],
       count: true
     });
     // 2/4/9/67/78/90~99
@@ -92,15 +93,15 @@ describe('mysql.test.ts', () => {
         desc: 'desc test ' + (i + 1)
       })
     }
-    const {list: [item23]} = await tagService.list({ match: [23] });
+    const {list: [item23]} = await tagService.list({ tags: [23] });
     const updateRes = await tagService.update(item23.id, {
       name: 'xxxx23',
       desc: 'descxxx23',
     });
     assert(updateRes.success && updateRes.id === item23.id);
-    const find23 = await tagService.list({ match: [item23.id] });
+    const find23 = await tagService.list({ tags: [item23.id] });
     assert(find23.list.length === 1 && find23.list[0].id === item23.id && find23.list[0].name === 'xxxx23' && find23.list[0].desc === 'descxxx23');
-    const {list: [item67]} = await tagService.list({ match: ['test-update-67'] });
+    const {list: [item67]} = await tagService.list({ tags: ['test-update-67'] });
     const updateByNameRes = await tagService.update(item67.name, {
       name: 'xxxx67',
       desc: 'descxxx67',
@@ -114,12 +115,12 @@ describe('mysql.test.ts', () => {
         desc: 'desc test ' + (i + 1)
       });
     }
-    const {list: [item23]} = await tagService.list({ match: ['test-remove-23'] });
+    const {list: [item23]} = await tagService.list({ tags: ['test-remove-23'] });
     const removeRes = await tagService.remove(item23.id);
     assert(removeRes.success && removeRes.id === item23.id);
-    const find23 = await tagService.list({ match: [item23.id], count: true });
+    const find23 = await tagService.list({ tags: [item23.id], count: true });
     assert(find23.list.length === 0 && find23.total === 0);
-    const findAll = await tagService.list({ match: ['test-remove-%'], count: true });
+    const findAll = await tagService.list({ tags: ['test-remove-%'], count: true });
     assert(findAll.total === 99);
   });
   it('bind tags', async () => {
@@ -147,7 +148,7 @@ describe('mysql.test.ts', () => {
       autoCreateTag: true
     });
     assert(bindRes3.success);
-    const tag = await tagService.list({ match: ['xxx']})
+    const tag = await tagService.list({ tags: ['xxx']})
     assert(tag.list[0].name === 'xxx' && tag.list[0].id);
   });
 
@@ -167,6 +168,7 @@ describe('mysql.test.ts', () => {
         });
       }
     }
+    
     const listRes = await tagService.listObjects({
       tags: ['test-list-obj-16'],
       count: true
@@ -174,13 +176,24 @@ describe('mysql.test.ts', () => {
     assert(listRes.list.length === 3 && listRes.total === 3);
     assert(listRes.list[0] === 2 && listRes.list[1] === 4 && listRes.list[2] === 8);
  
+
     // instanceid = 4/8 
     const listRes2 = await tagService.listObjects({
       tags: ['test-list-obj-16', 'test-list-obj-32'],
-      count: true
+      count: true,
+      type: MATCH_TYPE.And,
     });
     assert(listRes2.list.length === 2 && listRes2.total === 2);
     assert(listRes2.list[0] === 4 && listRes2.list[1] === 8);
+
+    const listRes2Or = await tagService.listObjects({
+      tags: ['test-list-obj-16', 'test-list-obj-32'],
+      count: true,
+      type: MATCH_TYPE.Or,
+      pageSize: 2,
+    });
+    assert(listRes2Or.list.length === 2 && listRes2Or.total === 3);
+    assert(listRes2Or.list[0] === 2 && listRes2Or.list[1] === 4);
 
     // remove tag 16
     await tagService.remove('test-list-obj-16');
