@@ -1,5 +1,5 @@
 import { TAG_ERROR } from "../error";
-import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions, ITagUnBindOptions, MATCH_TYPE } from "../interface";
+import { IMysqlQuery, ITagBindOptions, ITagDefine, ITagDialect, ITagDialectInstance, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagMysqlDialectOption, ITagOperResult, ITagSearchOptions, ITagUnBindOptions, MATCH_TYPE } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
 export enum MysqlTableName {
@@ -7,21 +7,85 @@ export enum MysqlTableName {
   Relationship = 'relationship',
 }
 
+
 export class MysqlDialect implements ITagDialect {
-  private options: ITagInitOptions;
   private dialectOptions: ITagMysqlDialectOption;
+  private name: string;
   private query: IMysqlQuery;
   constructor(options: ITagInitOptions) {
-    this.options = options;
+    this.name = options.name;
     this.dialectOptions = options.dialect as ITagMysqlDialectOption;
     this.query = this.dialectOptions.instance.query;
   }
 
   async ready(): Promise<void> {
-      if (this.dialectOptions.sync) {
-        await this.syncTable();
-      }
+    if (this.dialectOptions.sync) {
+      await this.syncTable();
+    }
   }
+
+  getInstance(group: string): ITagDialectInstance {
+    return new MysqlDialectInstance({
+      group,
+      query: this.dialectOptions.instance.query,
+      getTableName: this.buildTableName.bind(this),
+    })
+  }
+
+  private buildTableName(tableName) {
+    const tableNameList = this.dialectOptions.tablePrefix ? [this.dialectOptions.tablePrefix, this.name] : [this.name];
+    return tableNameList.concat(tableName).join(this.dialectOptions.tableSeparator || '_');
+  }
+
+  private async syncTable() {
+    // tag table
+    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Tag), [
+      `\`group\` varchar(32) NULL,`,
+      `\`name\` varchar(32) NULL,`,
+      `\`descri\` varchar(128) NULL,`,
+    ]);
+    // relationship table
+    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Relationship), [
+      `\`tid\` BIGINT unsigned NOT NULL,`,
+      `\`oid\` BIGINT unsigned NOT NULL,`,
+    ]);
+  }
+
+  
+
+  private async checkOrCreateTable(tableName: string, tableColumn: string[]) {
+    const [raws] = await this.query(`SHOW TABLES LIKE '${tableName}'`);
+    if (raws.length) {
+      return;
+    }
+    const createSql = `CREATE TABLE \`${tableName}\` (
+      \`id\` BIGINT unsigned NOT NULL AUTO_INCREMENT,
+      ${tableColumn.join('\n')}
+      \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      \`update_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP  ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+      PRIMARY KEY (id)
+    );`;
+    await this.query(createSql);
+  }
+}
+
+interface MysqlDialectInstanceOptions {
+  group: string;
+  getTableName: (str: string) => string;
+  query: IMysqlQuery;
+}
+
+export class MysqlDialectInstance implements ITagDialectInstance {
+  private group: string;
+  private query: IMysqlQuery;
+  private buildTableName : (str: string) => string;
+  constructor(options: MysqlDialectInstanceOptions) {
+    this.group = options.group;
+    this.query = options.query;
+    this.buildTableName = options.getTableName;
+  }
+
+  
 
   async new(tagDefine: ITagDefine): Promise<ITagOperResult> {
    const { ids: [existTagId] } = await this.getTags(tagDefine.name);
@@ -30,8 +94,8 @@ export class MysqlDialect implements ITagDialect {
         id: existTagId,
       });
     }
-    const sql = `insert into ${this.buildTableName(MysqlTableName.Tag)} (\`name\`, \`descri\`) values (?, ?)`;
-    const [raws] = await this.query(sql, [tagDefine.name, tagDefine.desc]);
+    const sql = `insert into ${this.buildTableName(MysqlTableName.Tag)} (\`group\`, \`name\`, \`descri\`) values (?, ?, ?)`;
+    const [raws] = await this.query(sql, [this.group, tagDefine.name, tagDefine.desc]);
     if (!raws.insertId) {
       return error(TAG_ERROR.OPER_ERROR);
     }
@@ -64,7 +128,7 @@ export class MysqlDialect implements ITagDialect {
     const fields = [];
     const placeholders = [];
     Object.keys(params).forEach(key => {
-      if (key === 'id') {
+      if (key === 'group' || key === 'id') {
         return;
       }
       let updateKey = key;
@@ -88,7 +152,7 @@ export class MysqlDialect implements ITagDialect {
     const { limit, offset } = getPageOpions(page, pageSize);
     const idList = [];
     const nameList = [];
-    const placeholder = [];
+    const placeholder = [this.group];
     for(const matchItem of tags) {
       if (typeof matchItem === 'number') {
         idList.push(matchItem);
@@ -108,10 +172,10 @@ export class MysqlDialect implements ITagDialect {
         return `\`name\` like ?`;
       }),
     ].filter(v => !!v).join(' or ');
-    const selectSql = `select * from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''} limit ${limit},${offset}`;
+    const selectSql = `select * from ${this.buildTableName(MysqlTableName.Tag)} where \`group\` = ?${condition ? ` and (${condition})` : ''} limit ${limit},${offset}`;
     let queryPromise = [this.query(selectSql, placeholder)]
     if (count) {
-      const countSql = `select count(id) as total from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''}`;
+      const countSql = `select count(id) as total from ${this.buildTableName(MysqlTableName.Tag)} where \`group\` = ?${condition ? ` and (${condition})` : ''}`;
       queryPromise.push(this.query(countSql, placeholder));
     }
     const [selectRes, countRes] = await Promise.all(queryPromise).then(resultList => {
@@ -254,11 +318,6 @@ export class MysqlDialect implements ITagDialect {
     return returnResult;
   }
 
-  private buildTableName(tableName) {
-    const tableNameList = this.dialectOptions.tablePrefix ? [this.dialectOptions.tablePrefix, this.options.group] : [this.options.group];
-    return tableNameList.concat(tableName).join(this.dialectOptions.tableSeparator || '_');
-  }
-
   private async getTags(tagIdOrName: string | number | Array<string | number> ): Promise<{
     ids: number[],
     notExists: {
@@ -270,7 +329,7 @@ export class MysqlDialect implements ITagDialect {
     const tags = [].concat(tagIdOrName);
     const idList = [];
     const nameList = [];
-    const placeholder = [];
+    const placeholder = [this.group];
     const keyMap = new Map();
     for(const tag of tags) {
       keyMap.set(tag, true);
@@ -286,7 +345,7 @@ export class MysqlDialect implements ITagDialect {
       idList.length ? `id in (${idList.join()})`: '',
       ...nameList
     ].filter(v => !!v).join(' or ');
-    const sql = `select id,name from ${this.buildTableName(MysqlTableName.Tag)} ${condition ? ` where ${condition}` : ''}`;
+    const sql = `select id,name from ${this.buildTableName(MysqlTableName.Tag)} where \`group\` = ?${condition ? ` and (${condition})` : ''}`;
     const [raws] = await this.query(sql, placeholder);
     const tagIds = raws.map(raw => {
       keyMap.delete(raw.id);
@@ -314,34 +373,4 @@ export class MysqlDialect implements ITagDialect {
     };
   }
 
-
-  private async syncTable() {
-    // tag table
-    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Tag), [
-      `\`name\` varchar(32) NULL,`,
-      `\`descri\` varchar(128) NULL,`,
-    ]);
-    // relationship table
-    await this.checkOrCreateTable(this.buildTableName(MysqlTableName.Relationship), [
-      `\`tid\` BIGINT unsigned NOT NULL,`,
-      `\`oid\` BIGINT unsigned NOT NULL,`,
-    ]);
-  }
-
-  
-
-  private async checkOrCreateTable(tableName: string, tableColumn: string[]) {
-    const [raws] = await this.query(`SHOW TABLES LIKE '${tableName}'`);
-    if (raws.length) {
-      return;
-    }
-    const createSql = `CREATE TABLE \`${tableName}\` (
-      \`id\` BIGINT unsigned NOT NULL AUTO_INCREMENT,
-      ${tableColumn.join('\n')}
-      \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      \`update_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP  ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-      PRIMARY KEY (id)
-    );`;
-    await this.query(createSql);
-  }
 }

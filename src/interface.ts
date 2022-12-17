@@ -1,6 +1,11 @@
 export interface ITagInitOptions {
-  group: string;
+  name?: string;
   dialect?: ITagDialectOption;
+}
+
+export interface ITagServiceInitOptions {
+  group: string;
+  dialect?: ITagDialect;
 }
 
 
@@ -34,6 +39,11 @@ export interface ITagItem extends ITagDefine {
 export abstract class ITagDialect {
   // 初始化
   abstract ready(): Promise<void>;
+  // 获取实体
+  abstract getInstance(instanceName: string): ITagDialectInstance;
+}
+
+export abstract class ITagDialectInstance {
   // 新增标签
   abstract new(tagDefine: ITagDefine): Promise<ITagOperResult>;
   // 删除标签

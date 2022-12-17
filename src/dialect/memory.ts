@@ -1,16 +1,38 @@
+import { ITagDialectInstance } from "..";
 import { TAG_ERROR } from "../error";
 import { ITagBindOptions, ITagDefine, ITagDialect, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions, MATCH_TYPE } from "../interface";
 import { error, formatMatchLike, getPageOpions, success } from "../utils";
 
+interface MemoryInstanceStore {
+  tagStore:  Map<string|number, ITagItem>;
+  tagRelationStore: Map<`${number}-${number}`, boolean>;
+}
 
 export class MemoryDialect implements ITagDialect {
-  // store tag information
-  private tagStore = new Map<string|number, ITagItem>();
-  // store relationship about tag and instance
-  private tagRelationStore = new Map<`${number}-${number}`, boolean>();
-  private tagIndex = 0;
+    // store tag information
+    private tagStore = new Map<string, MemoryInstanceStore>();
+    async ready(): Promise<void> {}
+    getInstance(group: string): ITagDialectInstance {
+      let instanceStores: MemoryInstanceStore = this.tagStore.get(group);
+      if (!instanceStores) {
+        instanceStores = {
+          tagStore: new Map(),
+          tagRelationStore: new Map(),
+        };
+        this.tagStore.set(group, instanceStores)
+      }
+      return new MemoryDialectInstance(instanceStores)
+    }
+}
 
-  async ready(): Promise<void> {}
+export class MemoryDialectInstance implements ITagDialectInstance {
+  private tagIndex = 0;
+  private tagStore: Map<string|number, ITagItem>;
+  private tagRelationStore: Map<`${number}-${number}`, boolean>;
+  constructor(stores: MemoryInstanceStore) {
+    this.tagStore = stores.tagStore;
+    this.tagRelationStore = stores.tagRelationStore;
+  }
 
   async new(tagDefine: ITagDefine): Promise<ITagOperResult> {
       let tagId;

@@ -1,11 +1,13 @@
-import { TagService, TAG_ERROR, MATCH_TYPE } from '../src';
+import { TAG_ERROR, MATCH_TYPE, TagManager } from '../src';
 import assert from 'assert';
 describe('memory.test.ts', () => {
+  let tagManager; TagManager;
+  beforeAll(async () => {
+    tagManager = new TagManager();
+    await tagManager.ready();
+  })
   it('new tag', async () => {
-    const tagService = new TagService({
-      group: 'test1'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test1');
     const tag1Result = await tagService.new({
       name: 'test1',
       desc: 'desc test 1'
@@ -25,10 +27,7 @@ describe('memory.test.ts', () => {
     assert (tag2Result.success && tag2Result.id === 2);
   });
   it('list tag', async () => {
-    const tagService = new TagService({
-      group: 'test-list'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-list');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),
@@ -64,10 +63,7 @@ describe('memory.test.ts', () => {
     assert(match.list[4].id === 78);
   });
   it('update tag', async () => {
-    const tagService = new TagService({
-      group: 'test-update'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-update');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),
@@ -89,10 +85,7 @@ describe('memory.test.ts', () => {
     assert(updateByNameRes.success && updateByNameRes.id === 67);
   });
   it('remove tag', async () => {
-    const tagService = new TagService({
-      group: 'test-update'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-remove');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),
@@ -107,10 +100,7 @@ describe('memory.test.ts', () => {
     assert(findAll.total === 99);
   });
   it('bind tags', async () => {
-    const tagService = new TagService({
-      group: 'test-bind-instance'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-bind-object');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),
@@ -140,10 +130,7 @@ describe('memory.test.ts', () => {
   });
 
   it('list objectId by tags', async () => {
-    const tagService = new TagService({
-      group: 'test-list-instance'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-list-object');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),
@@ -195,10 +182,7 @@ describe('memory.test.ts', () => {
   });
 
   it('unbind & listInstanTags', async () => {
-    const tagService = new TagService({
-      group: 'test-list-unbind'
-    });
-    await tagService.ready();
+    const tagService = tagManager.getService('test-list-bind');
     for(let i = 0; i < 100; i++) {
       await tagService.new({
         name: 'test' + (i + 1),

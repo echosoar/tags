@@ -1,26 +1,13 @@
-import { MysqlDialect, MemoryDialect } from "./dialect";
+import { MemoryDialect, MysqlDialect } from "./dialect";
 import { TAG_ERROR } from "./error";
-import { ITagBindOptions, ITagDefine, ITagDialect, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagUnBindOptions } from "./interface";
+import { ITagBindOptions, ITagDefine, ITagDialect, ITagDialectInstance, ITagInitOptions, ITagItem, ITagListInstanceOptions, ITagListInstanceTagsOptions, ITagListResult, ITagOperResult, ITagSearchOptions, ITagServiceInitOptions, ITagUnBindOptions } from "./interface";
 import { error } from "./utils";
 export * from './interface';
 export * from './error';
-export class TagService implements ITagDialect {
-  private initOptions: ITagInitOptions;
-  private dialect: ITagDialect;
-  constructor(initOptions: ITagInitOptions) {
-    this.initOptions = initOptions;
-    switch(this.initOptions.dialect?.dialectType) {
-      case 'mysql':
-        this.dialect = new MysqlDialect(this.initOptions);
-        break;
-      default:
-        this.dialect = new MemoryDialect();
-        break;
-    }
-  }
-
-  async ready() {
-    await this.dialect.ready();
+class TagService {
+  private dialect: ITagDialectInstance;
+  constructor(initOptions: ITagServiceInitOptions) {
+    this.dialect = initOptions.dialect.getInstance(initOptions.group);
   }
 
   async new(tagDefine: ITagDefine) {
@@ -71,8 +58,29 @@ export class TagService implements ITagDialect {
   }
 }
 
-export const makeTagService = async (initOptions: ITagInitOptions): Promise<TagService> => {
-  const tagService = new TagService(initOptions);
-  await tagService.ready();
-  return tagService;
+export class TagManager {
+  private initOptions: ITagInitOptions;
+  private dialect: ITagDialect;
+  constructor(initOptions: ITagInitOptions = {}) {
+    this.initOptions = initOptions;
+    switch(this.initOptions.dialect?.dialectType) {
+      case 'mysql':
+        this.dialect = new MysqlDialect(this.initOptions);
+        break;
+      default:
+        this.dialect = new MemoryDialect();
+        break;
+    }
+  }
+
+  async ready() {
+    await this.dialect.ready();
+  }
+
+  getService(group = 'default'): TagService {
+    return new TagService({
+      group,
+      dialect: this.dialect,
+    })
+  }
 }
